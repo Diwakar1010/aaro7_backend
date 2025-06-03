@@ -22,13 +22,13 @@ app.post("/submit", async (req, res) => {
 
   try {
     const { businessData, clientData, kycData, financialFiles } = req.body;
-    const superFolder = `${businessData.businessName}${Date.now()}`;
+    const superFolder = `${businessData.businessName}`;
 
     const uploadFileToS3 = async (file, folder, prefix = "") => {
 
       try {
         const buffer = Buffer.from(file.data, "base64");
-        const fileName = `${prefix}_${Date.now()}_${file.name}`;
+        const fileName = `${businessData.businessName}_${prefix}_${file.name}`;
 
         const command = new PutObjectCommand({
           Bucket: BUCKET_NAME,
@@ -48,7 +48,7 @@ app.post("/submit", async (req, res) => {
     const businessInfo = []
      for (const key in businessData) {
       if (businessData[key]?.data) {
-        await uploadFileToS3(businessData[key], "BusinessDetails", key);
+        await uploadFileToS3(businessData[key], `${businessData.businessName}_BusinessDetails`, key);
         businessInfo.push({ label: key, fileName: businessData[key].name });
       }
     }
@@ -56,7 +56,7 @@ app.post("/submit", async (req, res) => {
     const kycInfo = [];
     for (const key in kycData) {
       if (kycData[key]?.data) {
-        await uploadFileToS3(kycData[key], "KYCDetails", key);
+        await uploadFileToS3(kycData[key], `${businessData.businessName}_KYCDetails`, key);
         kycInfo.push({ label: key, fileName: kycData[key].name });
       }
     }
@@ -68,7 +68,7 @@ app.post("/submit", async (req, res) => {
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
         if (file?.data) {
-          await uploadFileToS3(file, "FinancialDetails", `${key}_${i}`);
+          await uploadFileToS3(file, `${businessData.businessName}_FinancialDetails`, `${key}_${i}`);
           financialInfo.push({ label: key, index: i, fileName: file.name });
         }
       }
@@ -78,18 +78,17 @@ app.post("/submit", async (req, res) => {
     for (let i = 0; i < clientData.length; i++) {
       const client = clientData[i];
       const uploadedFileNames = [];
-      console.log("Client Data:", client);
       // let { payrollListUpload, workOrderUpload, invoiceUpload } = client;
       if (client?.payrollListUpload) {
-        await uploadFileToS3(client.payrollListUpload, "ClientDetails", `${client.clientName}_payroll`);
+        await uploadFileToS3(client.payrollListUpload, `${businessData.businessName}_ClientDetails`, `${client.clientName}_payroll`);
         uploadedFileNames.push(client.payrollListUpload.name);
       }
       if (client?.workOrderUpload) {
-        await uploadFileToS3(client.workOrderUpload, "ClientDetails", `${client.clientName}_workorder`);
+        await uploadFileToS3(client.workOrderUpload, `${businessData.businessName}_ClientDetails`, `${client.clientName}_workorder`);
         uploadedFileNames.push(client.workOrderUpload.name);
       }
       if (client?.invoiceUpload) {
-        await uploadFileToS3(client.invoiceUpload, "ClientDetails", `${client.clientName}_invoice`);
+        await uploadFileToS3(client.invoiceUpload, `${businessData.businessName}_ClientDetails`, `${client.clientName}_invoice`);
         uploadedFileNames.push(client.invoiceUpload.name);
       }
     }
@@ -97,12 +96,12 @@ app.post("/submit", async (req, res) => {
     // Save BusinessDetails Excel
     const businessSheet = new ExcelJS.Workbook();
     const businessWs = businessSheet.addWorksheet("Business Details");
-    businessWs.addRow(["Business Name", "Entity", "Industry", "Business Age","Registered Address", "Head Office Address"]);
+    businessWs.addRow(["Business Name", "Entity", "Industry", "Business Age(in Years)","Registered Address", "Head Office Address"]);
     businessWs.addRow([businessData.businessName, businessData.entity, businessData.industry, businessData.businessAge, businessData.registeredOffice, businessData.headOffice]);
     const businessBuffer = await businessSheet.xlsx.writeBuffer();
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${superFolder}/BusinessDetails/Business_Details.xlsx`,
+      Key: `${superFolder}/${businessData.businessName}_BusinessDetails/${businessData.businessName}_Business_Details.xlsx`,
       Body: businessBuffer,
       ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }));
@@ -110,12 +109,12 @@ app.post("/submit", async (req, res) => {
     // Save KYC Excel
     const kycSheet = new ExcelJS.Workbook();
     const kycWs = kycSheet.addWorksheet("KYC Details");
-    kycWs.addRow(["Document", "File Name"]);
-    kycInfo.forEach(item => kycWs.addRow([item.label, item.fileName]));
+    kycWs.addRow(["Document Name", "YES / NO"]);
+    kycInfo.forEach(item => kycWs.addRow([item.label, item.fileName ? "YES" : "NO"]));
     const kycBuffer = await kycSheet.xlsx.writeBuffer();
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${superFolder}/KYCDetails/KYC_Details.xlsx`,
+      Key: `${superFolder}/${businessData.businessName}_KYCDetails/${businessData.businessName}_KYC_Details.xlsx`,
       Body: kycBuffer,
       ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }));
@@ -123,22 +122,21 @@ app.post("/submit", async (req, res) => {
     // Save Financial Excel
     const financialSheet = new ExcelJS.Workbook();
     const financialWs = financialSheet.addWorksheet("Financial Details");
-    financialWs.addRow(["File Type", "File Name"]);
-    financialInfo.forEach(item => financialWs.addRow([item.label, item.fileName]));
+    financialWs.addRow(["Document Name", "YES / NO"]);
+    financialInfo.forEach(item => financialWs.addRow([item.label, item.fileName ? "YES" : "NO"]));
     const financialBuffer = await financialSheet.xlsx.writeBuffer();
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${superFolder}/FinancialDetails/Financial_Details.xlsx`,
+      Key: `${superFolder}/${businessData.businessName}_FinancialDetails/${businessData.businessName}_Financial_Details.xlsx`,
       Body: financialBuffer,
       ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }));
 
     // Save Client Excel
     const clientSheet = new ExcelJS.Workbook();
-    console.log("::138Client Data:", clientData);
     const clientWs = clientSheet.addWorksheet("Client Details");
     clientWs.addRow([
-      "Client Name", "Client Type", "Last Invoice Amount", "Payment Cycle",
+      "Client Name", "Client Type", "Last Invoice Amount", "Payment Cycle (in Days)",
       "Project Start Date", "Work Order Valid till",
     ]);
     clientData.forEach(client => {
@@ -154,7 +152,7 @@ app.post("/submit", async (req, res) => {
     const clientBuffer = await clientSheet.xlsx.writeBuffer();
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${superFolder}/ClientDetails/Client_Details.xlsx`,
+      Key: `${superFolder}/${businessData.businessName}_ClientDetails/${businessData.businessName}_Client_Details.xlsx`,
       Body: clientBuffer,
       ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }));
