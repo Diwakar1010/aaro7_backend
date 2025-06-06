@@ -92,15 +92,15 @@ app.post("/submit", async (req, res) => {
     for (const client of clientData) {
       if (client?.payrollListUpload) {
         await uploadFileToS3(client.payrollListUpload, `${businessData.businessName}-ClientDetails`, `${client.clientName}-Employee_payroll_list`);
-        uploadedFileNames.push(client.payrollListUpload.name);
+        // uploadedFileNames.push(client.payrollListUpload.name);
       }
       if (client?.workOrderUpload) {
         await uploadFileToS3(client.workOrderUpload, `${businessData.businessName}-ClientDetails`, `${client.clientName}-workorder`);
-        uploadedFileNames.push(client.workOrderUpload.name);
+        // uploadedFileNames.push(client.workOrderUpload.name);
       }
       if (client?.invoiceUpload) {
         await uploadFileToS3(client.invoiceUpload, `${businessData.businessName}-ClientDetails`, `${client.clientName}-recent_invoice`);
-        uploadedFileNames.push(client.invoiceUpload.name);
+        // uploadedFileNames.push(client.invoiceUpload.name);
       }
     }
 
