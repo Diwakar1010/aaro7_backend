@@ -10,7 +10,7 @@ const app = express();
 app.use(cors({ origin: "*", methods: ["POST"], allowedHeaders: ["Content-Type"] }));
 
 // Handle large JSON payloads
-app.use(express.json({ limit: "85mb" }));
+app.use(express.json({ limit: "150mb" }));
 
 // AWS S3 Setup
 const s3 = new S3Client({
@@ -39,13 +39,14 @@ app.post("/submit", async (req, res) => {
     const uploadFileToS3 = async (file, folder, prefix = "") => {
       try {
         const buffer = Buffer.from(file.data, "base64");
-        const fileName = `${businessData.businessName}_${prefix}_${file.name}`;
+        const fileName = `${businessData.businessName}-${prefix}`;
 
         const command = new PutObjectCommand({
           Bucket: BUCKET_NAME,
           Key: `${superFolder}/${folder}/${fileName}`,
           Body: buffer,
           ContentType: file.type,
+          ContentDisposition: `attachment; filename="${encodeURIComponent(fileName)}"`,
         });
 
         await s3.send(command);
@@ -60,7 +61,7 @@ app.post("/submit", async (req, res) => {
     const businessInfo = [];
     for (const key in businessData) {
       if (businessData[key]?.data) {
-        await uploadFileToS3(businessData[key], `${superFolder}_BusinessDetails`, key);
+        await uploadFileToS3(businessData[key], `${businessData.businessName}-BusinessDetails`, key);
         businessInfo.push({ label: key, fileName: businessData[key].name });
       }
     }
@@ -69,7 +70,7 @@ app.post("/submit", async (req, res) => {
     const kycInfo = [];
     for (const key in kycData) {
       if (kycData[key]?.data) {
-        await uploadFileToS3(kycData[key], `${superFolder}_KYCDetails`, key);
+        await uploadFileToS3(kycData[key], `${businessData.businessName}-KYCDetails`, key);
         kycInfo.push({ label: key, fileName: kycData[key].name });
       }
     }
@@ -81,7 +82,7 @@ app.post("/submit", async (req, res) => {
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
         if (file?.data) {
-          await uploadFileToS3(file, `${superFolder}_FinancialDetails`, `${key}_${i}`);
+          await uploadFileToS3(file, `${businessData.businessName}-FinancialDetails`, `${key}-${i}`);
           financialInfo.push({ label: key, index: i, fileName: file.name });
         }
       }
@@ -90,13 +91,16 @@ app.post("/submit", async (req, res) => {
     // Upload Client Files
     for (const client of clientData) {
       if (client?.payrollListUpload) {
-        await uploadFileToS3(client.payrollListUpload, `${superFolder}_ClientDetails`, `${client.clientName}_payroll`);
+        await uploadFileToS3(client.payrollListUpload, `${businessData.businessName}-ClientDetails`, `${client.clientName}-Employee_payroll_list`);
+        uploadedFileNames.push(client.payrollListUpload.name);
       }
       if (client?.workOrderUpload) {
-        await uploadFileToS3(client.workOrderUpload, `${superFolder}_ClientDetails`, `${client.clientName}_workorder`);
+        await uploadFileToS3(client.workOrderUpload, `${businessData.businessName}-ClientDetails`, `${client.clientName}-workorder`);
+        uploadedFileNames.push(client.workOrderUpload.name);
       }
       if (client?.invoiceUpload) {
-        await uploadFileToS3(client.invoiceUpload, `${superFolder}_ClientDetails`, `${client.clientName}_invoice`);
+        await uploadFileToS3(client.invoiceUpload, `${businessData.businessName}-ClientDetails`, `${client.clientName}-recent_invoice`);
+        uploadedFileNames.push(client.invoiceUpload.name);
       }
     }
 
@@ -115,7 +119,7 @@ app.post("/submit", async (req, res) => {
     const businessBuffer = await businessSheet.xlsx.writeBuffer();
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${superFolder}/${superFolder}_BusinessDetails/${superFolder}_Business_Details.xlsx`,
+      Key: `${superFolder}/${businessData.businessName}-BusinessDetails/${businessData.businessName}-Business_Details.xlsx`,
       Body: businessBuffer,
       ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }));
@@ -128,7 +132,7 @@ app.post("/submit", async (req, res) => {
     const kycBuffer = await kycSheet.xlsx.writeBuffer();
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${superFolder}/${superFolder}_KYCDetails/${superFolder}_KYC_Details.xlsx`,
+      Key: `${superFolder}/${businessData.businessName}-KYCDetails/${businessData.businessName}-KYC_Details.xlsx`,
       Body: kycBuffer,
       ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }));
@@ -141,7 +145,7 @@ app.post("/submit", async (req, res) => {
     const financialBuffer = await financialSheet.xlsx.writeBuffer();
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${superFolder}/${superFolder}_FinancialDetails/${superFolder}_Financial_Details.xlsx`,
+      Key: `${superFolder}/${businessData.businessName}-FinancialDetails/${businessData.businessName}-Financial_Details.xlsx`,
       Body: financialBuffer,
       ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }));
@@ -166,7 +170,7 @@ app.post("/submit", async (req, res) => {
     const clientBuffer = await clientSheet.xlsx.writeBuffer();
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${superFolder}/${superFolder}_ClientDetails/${superFolder}_Client_Details.xlsx`,
+      Key: `${superFolder}/${businessData.businessName}-ClientDetails/${businessData.businessName}-Client_Details.xlsx`,
       Body: clientBuffer,
       ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }));
