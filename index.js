@@ -46,7 +46,7 @@ app.post("/submit", async (req, res) => {
           Key: `${superFolder}/${folder}/${fileName}`,
           Body: buffer,
           ContentType: file.type,
-          ContentDisposition: `attachment; filename="${encodeURIComponent(fileName)}"`,
+          ContentDisposition: `attachment; filename="${fileName}"`,
         });
 
         await s3.send(command);
